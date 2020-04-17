@@ -19,6 +19,7 @@ public class EventingSystem implements Runnable {
 	private boolean endWhenEmpty = true;
 
 	private QueuedEventPool qePool = new QueuedEventPool();
+	private String name;
 
 	/**
 	 * Construct an EventingSystem with default attributes:
@@ -32,6 +33,11 @@ public class EventingSystem implements Runnable {
 	 */
 	public EventingSystem() {
 		queue = new PriorityQueue<QueuedEvent>();
+	}
+	
+	public EventingSystem(String name) {
+		this();
+		this.name = name;
 	}
 
 	/**
@@ -109,6 +115,9 @@ public class EventingSystem implements Runnable {
 	}
 
 	private void appendQueuedEvent(QueuedEvent qe) {
+		if (verbose) {
+			System.err.println("ES appending " + qe);
+		}
 		synchronized (queue) {
 			boolean wasEmpty = queue.isEmpty();
 			queue.add(qe);
@@ -207,6 +216,9 @@ public class EventingSystem implements Runnable {
 
 	@Override
 	public void run() {
+		if (verbose) {
+			System.err.println(this + " entered run().");
+		}
 		running = true;
 		QueuedEvent qe = null;
 		while (running) {
@@ -215,20 +227,31 @@ public class EventingSystem implements Runnable {
 			}
 			synchronized (queue) {
 				qe = queue.poll();
-				if (qe == null) {
+				while (qe == null && running) {
 					if (endWhenEmpty) {
 						running = false;
-						return;
+						continue;
 					}
 					// else, wait for a new event to arrive
 					while (queue.isEmpty()) {
+						if (verbose) {
+							System.err.println(this + " waiting for the queue to become not-empty.");
+						}
 						try {
 							queue.wait();
 						} catch (InterruptedException e) {
 							running = false;
-							return;
+							break;
+						}
+						if (verbose) {
+							System.err.println(this + " woken up.");
 						}
 					}
+					qe = queue.poll();
+				}
+				if (qe == null || running == false) {
+					running = false;
+					continue;
 				}
 			}
 			Long now = qe.getDeliveryTime();
@@ -238,7 +261,13 @@ public class EventingSystem implements Runnable {
 			if (endTime > 0 && currentTime > endTime) {
 				return;
 			}
+			if (verbose) {
+				System.err.println(currentTime + ":\t" + this + " delivering " + qe.getEvent() + " to " + qe.getTarget());
+			}
 			qe.getTarget().process(qe.getEvent(), this);
+		}
+		if (verbose) {
+			System.err.println(currentTime + "\t: " + this + " terminating the run loop. qe = " + qe + ", running = " + running);
 		}
 	}
 
@@ -310,6 +339,11 @@ public class EventingSystem implements Runnable {
 			}
 			return deliveryTime.compareTo(qe.deliveryTime);
 		}
+		
+		@Override
+		public String toString() {
+			return "Deliver <" + event + "> @" + deliveryTime + " to " + target;
+		}
 
 	}
 
@@ -337,6 +371,22 @@ public class EventingSystem implements Runnable {
 			return r;
 		}
 
+	}
+
+	public void runForever() {
+		endWhenEmpty = false;
+	}
+
+	public void setVerbose(boolean v) {
+		verbose = v;
+	}
+	
+	@Override
+	public String toString() {
+		if (name != null) {
+			return name;
+		}
+		return super.toString();
 	}
 
 }
