@@ -116,7 +116,7 @@ public class EventingSystem implements Runnable {
 
 	private void appendQueuedEvent(QueuedEvent qe) {
 		if (verbose) {
-			System.err.println("ES appending " + qe);
+			System.err.println(currentTime + ":\t" + this + " appending {" + qe + "}");
 		}
 		synchronized (queue) {
 			boolean wasEmpty = queue.isEmpty();
@@ -262,12 +262,12 @@ public class EventingSystem implements Runnable {
 				return;
 			}
 			if (verbose) {
-				System.err.println(currentTime + ":\t" + this + " delivering " + qe.getEvent() + " to " + qe.getTarget());
+				System.err.println(currentTime + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
 			}
 			qe.getTarget().process(qe.getEvent(), this);
 		}
 		if (verbose) {
-			System.err.println(currentTime + "\t: " + this + " terminating the run loop. qe = " + qe + ", running = " + running);
+			System.err.println(currentTime + ":\t" + this + " terminating the run loop. qe = " + qe + ", running = " + running);
 		}
 	}
 
@@ -342,7 +342,7 @@ public class EventingSystem implements Runnable {
 		
 		@Override
 		public String toString() {
-			return "Deliver <" + event + "> @" + deliveryTime + " to " + target;
+			return "event <" + event + "> to be delivered @" + deliveryTime + " to " + target;
 		}
 
 	}
