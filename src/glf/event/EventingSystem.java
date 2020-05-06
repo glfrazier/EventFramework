@@ -1,6 +1,8 @@
 package glf.event;
 
+import java.util.HashSet;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import glf.objectpool.AbstractPooledObject;
@@ -15,8 +17,11 @@ public class EventingSystem implements Runnable {
 	private long currentTime;
 	private long endTime;
 	private boolean verbose;
-	private boolean running;
 	private boolean endWhenEmpty = true;
+	private long totalEventsDelivered = 0;
+
+	private Set<EndCondition> endConditionsForEmptyQueue = null;
+	private Set<EndCondition> endConditionsForEventDelivery = null;
 
 	private QueuedEventPool qePool = new QueuedEventPool();
 	private String name;
@@ -34,7 +39,7 @@ public class EventingSystem implements Runnable {
 	public EventingSystem() {
 		queue = new PriorityQueue<QueuedEvent>();
 	}
-	
+
 	public EventingSystem(String name) {
 		this();
 		this.name = name;
@@ -107,7 +112,7 @@ public class EventingSystem implements Runnable {
 	 * Schedule an event to be delivered now.
 	 * 
 	 * @param target the receipient of the event
-	 * @param e the event to deliver
+	 * @param e      the event to deliver
 	 */
 	public void scheduleEvent(EventProcessor target, Event e) {
 		QueuedEvent qe = qePool.allocate(target, e);
@@ -187,7 +192,7 @@ public class EventingSystem implements Runnable {
 	 * framework starts at time zero.
 	 * 
 	 * @param endTime no events will be delivered after this time
-	 * @param unit the unit in which <code>endTime</code> is specified.
+	 * @param unit    the unit in which <code>endTime</code> is specified.
 	 */
 	public void setEndTime(long endTime, TimeUnit unit) {
 		this.endTime = finestTimeUnit.convert(endTime, unit);
@@ -219,7 +224,7 @@ public class EventingSystem implements Runnable {
 		if (verbose) {
 			System.err.println(this + " entered run().");
 		}
-		running = true;
+		boolean running = true;
 		QueuedEvent qe = null;
 		while (running) {
 			if (qe != null) {
@@ -234,11 +239,26 @@ public class EventingSystem implements Runnable {
 					}
 					// else, wait for a new event to arrive
 					while (queue.isEmpty()) {
+						if (endConditionsForEmptyQueue != null) {
+							for (EndCondition ec : endConditionsForEmptyQueue) {
+								if (ec.taskIsComplete()) {
+									running = false;
+									break;
+								}
+							}
+							if (!running) {
+								break;
+							}
+						}
 						if (verbose) {
 							System.err.println(this + " waiting for the queue to become not-empty.");
 						}
 						try {
-							queue.wait();
+							long waitMillis = 0;
+							if (endConditionsForEmptyQueue != null) {
+								waitMillis = 100; // check condition every 10th of a second
+							}
+							queue.wait(waitMillis, 0);
 						} catch (InterruptedException e) {
 							running = false;
 							break;
@@ -254,6 +274,18 @@ public class EventingSystem implements Runnable {
 					continue;
 				}
 			}
+			if (endConditionsForEventDelivery != null) {
+				for (EndCondition ec : endConditionsForEventDelivery) {
+					if (ec.taskIsComplete()) {
+						running = false;
+						break;
+					}
+				}
+				if (!running) {
+					continue;
+				}
+			}
+			totalEventsDelivered++;
 			Long now = qe.getDeliveryTime();
 			if (now != null) {
 				currentTime = now;
@@ -262,12 +294,14 @@ public class EventingSystem implements Runnable {
 				return;
 			}
 			if (verbose) {
-				System.err.println(currentTime + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
+				System.err.println(
+						currentTime + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
 			}
 			qe.getTarget().process(qe.getEvent(), this);
 		}
 		if (verbose) {
-			System.err.println(currentTime + ":\t" + this + " terminating the run loop. qe = " + qe + ", running = " + running);
+			System.err.println(
+					currentTime + ":\t" + this + " terminating the run loop. qe = " + qe + ", running = " + running);
 		}
 	}
 
@@ -339,7 +373,7 @@ public class EventingSystem implements Runnable {
 			}
 			return deliveryTime.compareTo(qe.deliveryTime);
 		}
-		
+
 		@Override
 		public String toString() {
 			return "event <" + event + "> to be delivered @" + deliveryTime + " to " + target;
@@ -373,14 +407,34 @@ public class EventingSystem implements Runnable {
 
 	}
 
-	public void runForever() {
+	/**
+	 * The {@link #run()} method will <strong>NOT</strong> return when it the event
+	 * queue is emptied. Rather, it will wait for more events.
+	 * 
+	 * @see #exitOnEmptyQueue()
+	 */
+	public void waitOnEmptyQueue() {
 		endWhenEmpty = false;
+	}
+
+	/**
+	 * The {@link #run()} method will return when it the event queue is emptied.<br>
+	 * This is the default behavior.
+	 * 
+	 * @see #waitOnEmptyQueue()
+	 */
+	public void exitOnEmptyQueue() {
+		endWhenEmpty = true;
+	}
+
+	public long getTotalEventsDelivered() {
+		return totalEventsDelivered;
 	}
 
 	public void setVerbose(boolean v) {
 		verbose = v;
 	}
-	
+
 	@Override
 	public String toString() {
 		if (name != null) {
@@ -389,4 +443,51 @@ public class EventingSystem implements Runnable {
 		return super.toString();
 	}
 
+	/**
+	 * Register an end condition that is checked whenever the run thread encounters
+	 * an empty event queue. Registering end conditions here is only relevant if the
+	 * eventing system is set to not terminate when the queue is empty.
+	 * 
+	 * @see #waitOnEmptyQueue()
+	 * @see #exitOnEmptyQueue()
+	 * 
+	 * @param ec The end condition to be checked.
+	 */
+	public void registerEndConditionOnEmptyQueue(EndCondition ec) {
+		if (endConditionsForEmptyQueue == null) {
+			endConditionsForEmptyQueue = new HashSet<EndCondition>();
+		}
+		endConditionsForEmptyQueue.add(ec);
+	}
+
+	/**
+	 * Register an end condition that is checked prior to every event delivery. Note
+	 * the potential performance impact.
+	 * 
+	 * @param ec The end condition to be checked.
+	 */
+	public void registerEndConditionOnEventDelivery(EndCondition ec) {
+		if (endConditionsForEventDelivery == null) {
+			endConditionsForEventDelivery = new HashSet<EndCondition>();
+		}
+		endConditionsForEventDelivery.add(ec);
+	}
+
+	/**
+	 * Objects that can tell a processing thread when to terminate implement this
+	 * interface.
+	 * 
+	 * @author Greg Frazier
+	 *
+	 */
+	public static interface EndCondition {
+
+		/**
+		 * Note that there are two methods for registering end conditions; they differ
+		 * in when the test is applied.
+		 * 
+		 * @return <code>true</code> if this processing thread should terminate.
+		 */
+		public boolean taskIsComplete();
+	}
 }
