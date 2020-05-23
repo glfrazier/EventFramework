@@ -1,4 +1,4 @@
-package glf.event;
+package com.github.glfrazier;
 
 import java.util.HashSet;
 import java.util.PriorityQueue;
@@ -11,20 +11,25 @@ import glf.objectpool.ObjectPool;
 public class EventingSystem implements Runnable {
 
 	private TimeUnit finestTimeUnit = TimeUnit.MILLISECONDS;
-	private boolean realTime = false;
+	private boolean realTime = true;
 	private Double realTimeMultiplier = null;
 	private PriorityQueue<QueuedEvent> queue;
 	private long currentTime;
 	private long endTime;
 	private boolean verbose;
-	private boolean endWhenEmpty = true;
+	private boolean endWhenEmpty = false;
+
+	private int threadCount;
+
 	private long totalEventsDelivered = 0;
+	private int maxQueueLength = 0;
 
 	private Set<EndCondition> endConditionsForEmptyQueue = null;
 	private Set<EndCondition> endConditionsForEventDelivery = null;
 
 	private QueuedEventPool qePool = new QueuedEventPool();
 	private String name;
+	private boolean terminated;;
 
 	/**
 	 * Construct an EventingSystem with default attributes:
@@ -121,12 +126,16 @@ public class EventingSystem implements Runnable {
 
 	private void appendQueuedEvent(QueuedEvent qe) {
 		if (verbose) {
-			System.err.println(currentTime + ":\t" + this + " appending {" + qe + "}");
+			System.err.println(getCurrentTime() + ":\t" + this + " appending {" + qe + "}");
+			System.err.flush();
 		}
 		synchronized (queue) {
-			boolean wasEmpty = queue.isEmpty();
 			queue.add(qe);
-			if (wasEmpty) {
+			int l = queue.size();
+			if (l > maxQueueLength) {
+				maxQueueLength = l;
+			}
+			if (queue.peek() == qe) {
 				queue.notifyAll();
 			}
 		}
@@ -223,16 +232,20 @@ public class EventingSystem implements Runnable {
 	public void run() {
 		if (verbose) {
 			System.err.println(this + " entered run().");
+			System.err.flush();
+		}
+		synchronized (this) {
+			threadCount++;
 		}
 		boolean running = true;
 		QueuedEvent qe = null;
-		while (running) {
+		while (running && !terminated) {
 			if (qe != null) {
 				qe.release();
 			}
 			synchronized (queue) {
 				qe = queue.poll();
-				while (qe == null && running) {
+				while (qe == null && running && !terminated) {
 					if (endWhenEmpty) {
 						running = false;
 						continue;
@@ -246,12 +259,13 @@ public class EventingSystem implements Runnable {
 									break;
 								}
 							}
-							if (!running) {
+							if (!running || terminated) {
 								break;
 							}
 						}
 						if (verbose) {
 							System.err.println(this + " waiting for the queue to become not-empty.");
+							System.err.flush();
 						}
 						try {
 							long waitMillis = 0;
@@ -265,6 +279,7 @@ public class EventingSystem implements Runnable {
 						}
 						if (verbose) {
 							System.err.println(this + " woken up.");
+							System.err.flush();
 						}
 					}
 					qe = queue.poll();
@@ -273,6 +288,24 @@ public class EventingSystem implements Runnable {
 					running = false;
 					continue;
 				}
+				
+				if (realTime && qe.deliveryTime != null) {
+					long now = System.currentTimeMillis();
+					if (now < qe.deliveryTime) {
+						long delta = qe.deliveryTime - now;
+						queue.add(qe);
+						qe = null;
+						try {
+							queue.wait(delta);
+						} catch (InterruptedException e) {
+							running = false;
+							terminated = true;
+							break;
+						}
+						continue;
+					}
+				}
+				
 			}
 			if (endConditionsForEventDelivery != null) {
 				for (EndCondition ec : endConditionsForEventDelivery) {
@@ -295,13 +328,18 @@ public class EventingSystem implements Runnable {
 			}
 			if (verbose) {
 				System.err.println(
-						currentTime + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
+						getCurrentTime() + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
+				System.err.flush();
 			}
 			qe.getTarget().process(qe.getEvent(), this);
 		}
 		if (verbose) {
 			System.err.println(
 					currentTime + ":\t" + this + " terminating the run loop. qe = " + qe + ", running = " + running);
+			System.err.flush();
+		}
+		synchronized (this) {
+			threadCount--;
 		}
 	}
 
@@ -408,23 +446,15 @@ public class EventingSystem implements Runnable {
 	}
 
 	/**
-	 * The {@link #run()} method will <strong>NOT</strong> return when it the event
-	 * queue is emptied. Rather, it will wait for more events.
+	 * Specify whether the eventing system should exit the run() method when the
+	 * event queue is empty (<code>on = true</code>). The default behavior is for
+	 * the run method to block, waiting for an event to arrive.
 	 * 
-	 * @see #exitOnEmptyQueue()
+	 * @param on when <code>true</code>, sets the eventing system to exit when the
+	 *           event queue is empty
 	 */
-	public void waitOnEmptyQueue() {
-		endWhenEmpty = false;
-	}
-
-	/**
-	 * The {@link #run()} method will return when it the event queue is emptied.<br>
-	 * This is the default behavior.
-	 * 
-	 * @see #waitOnEmptyQueue()
-	 */
-	public void exitOnEmptyQueue() {
-		endWhenEmpty = true;
+	public void exitOnEmptyQueue(boolean on) {
+		endWhenEmpty = on;
 	}
 
 	public long getTotalEventsDelivered() {
@@ -489,5 +519,30 @@ public class EventingSystem implements Runnable {
 		 * @return <code>true</code> if this processing thread should terminate.
 		 */
 		public boolean taskIsComplete();
+	}
+
+	public int getQueueLength() {
+		synchronized (queue) {
+			return queue.size();
+		}
+	}
+
+	public int getMaxQueueLength() {
+		synchronized (queue) {
+			return maxQueueLength;
+		}
+	}
+
+	public void terminate() {
+		synchronized (queue) {
+			terminated = true;
+			queue.clear();
+			queue.notifyAll();
+		}
+	}
+
+	public boolean isTerminated() {
+		// TODO Auto-generated method stub
+		return false;
 	}
 }

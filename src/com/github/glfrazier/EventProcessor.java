@@ -1,4 +1,4 @@
-package glf.event;
+package com.github.glfrazier;
 
 /**
  * Implemented by objects that process events.
