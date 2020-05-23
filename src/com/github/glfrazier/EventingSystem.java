@@ -5,8 +5,8 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import glf.objectpool.AbstractPooledObject;
-import glf.objectpool.ObjectPool;
+import com.github.glfrazier.objectpool.AbstractPooledObject;
+import com.github.glfrazier.objectpool.ObjectPool;
 
 public class EventingSystem implements Runnable {
 
