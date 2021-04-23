@@ -11,6 +11,14 @@ import java.net.Socket;
 
 import com.github.glfrazier.event.EventingSystem;
 
+/**
+ * A thread that reads {@link Command}s from System.in and executes those
+ * commands against the EventingSystem. These can either be queries (e.g.,
+ * obtaining progress information) or directives (e.g., shut down).
+ * 
+ * @author Greg Frazier
+ *
+ */
 public class EventingSystemMonitor implements Runnable {
 
 	public static final String EXITING = "EXITING";
