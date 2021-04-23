@@ -1,4 +1,4 @@
-package com.github.glfrazier;
+package com.github.glfrazier.event;
 
 /**
  * A tagging interface for objects that are passed to

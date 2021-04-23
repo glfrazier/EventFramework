@@ -1,4 +1,4 @@
-package com.github.glfrazier;
+package com.github.glfrazier.event;
 
 import java.util.HashSet;
 import java.util.PriorityQueue;
@@ -16,6 +16,7 @@ public class EventingSystem implements Runnable {
 	private PriorityQueue<QueuedEvent> queue;
 	private long currentTime;
 	private long endTime;
+	private long startTime;
 	private boolean verbose;
 	private boolean endWhenEmpty = false;
 
@@ -106,8 +107,8 @@ public class EventingSystem implements Runnable {
 
 	public void scheduleEventAbsolute(EventProcessor target, Event e, long time, TimeUnit timeUnit) {
 		if (finestTimeUnit.convert(time, timeUnit) < getCurrentTime()) {
-			throw new IllegalArgumentException(
-					"Events must be scheduled for now or in the future (>= getCurrentTime())");
+			throw new IllegalArgumentException("Event scheduled for " + finestTimeUnit.convert(time, timeUnit)
+					+ ", current time = " + getCurrentTime());
 		}
 		QueuedEvent qe = qePool.allocate(target, e, finestTimeUnit.convert(time, timeUnit));
 		appendQueuedEvent(qe);
@@ -153,6 +154,14 @@ public class EventingSystem implements Runnable {
 	 */
 	public long getCurrentTime() {
 		return getCurrentTime(finestTimeUnit);
+	}
+	
+	public long getStartTime() {
+		return startTime;
+	}
+	
+	public long getElapsedTime() {
+		return getCurrentTime() - startTime;
 	}
 
 	/**
@@ -238,6 +247,7 @@ public class EventingSystem implements Runnable {
 			threadCount++;
 		}
 		boolean running = true;
+		startTime = getCurrentTime();
 		QueuedEvent qe = null;
 		while (running && !terminated) {
 			if (qe != null) {
@@ -288,11 +298,17 @@ public class EventingSystem implements Runnable {
 					running = false;
 					continue;
 				}
-				
+
 				if (realTime && qe.deliveryTime != null) {
+					if (verbose) {
+						System.out.println(this + " has an event to be delivered at " + qe.deliveryTime);
+					}
 					long now = System.currentTimeMillis();
 					if (now < qe.deliveryTime) {
 						long delta = qe.deliveryTime - now;
+						if (verbose) {
+							System.out.println("now=" + now + ", wait for " + delta + " ms");
+						}
 						queue.add(qe);
 						qe = null;
 						try {
@@ -305,7 +321,7 @@ public class EventingSystem implements Runnable {
 						continue;
 					}
 				}
-				
+
 			}
 			if (endConditionsForEventDelivery != null) {
 				for (EndCondition ec : endConditionsForEventDelivery) {
@@ -544,5 +560,9 @@ public class EventingSystem implements Runnable {
 	public boolean isTerminated() {
 		// TODO Auto-generated method stub
 		return false;
+	}
+
+	public void setRealTime(boolean b) {
+		realTime = b;
 	}
 }
