@@ -5,6 +5,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import com.github.glfrazier.event.util.PubSubDepot;
 import com.github.glfrazier.objectpool.AbstractPooledObject;
 import com.github.glfrazier.objectpool.ObjectPool;
 
@@ -30,7 +31,12 @@ public class EventingSystem implements Runnable {
 
 	private QueuedEventPool qePool = new QueuedEventPool();
 	private String name;
-	private boolean terminated;;
+	private boolean terminated;
+
+	/**
+	 * In support of a pub-sub model
+	 */
+	private PubSubDepot pubsubDepot;
 
 	/**
 	 * Construct an EventingSystem with default attributes:
@@ -155,11 +161,11 @@ public class EventingSystem implements Runnable {
 	public long getCurrentTime() {
 		return getCurrentTime(finestTimeUnit);
 	}
-	
+
 	public long getStartTime() {
 		return startTime;
 	}
-	
+
 	public long getElapsedTime() {
 		return getCurrentTime() - startTime;
 	}
@@ -564,5 +570,16 @@ public class EventingSystem implements Runnable {
 
 	public void setRealTime(boolean b) {
 		realTime = b;
+	}
+
+	public PubSubDepot getPubSubDepot() {
+		if (pubsubDepot == null) {
+			synchronized (this) {
+				if (pubsubDepot == null) {
+					pubsubDepot = new PubSubDepot();
+				}
+			}
+		}
+		return pubsubDepot;
 	}
 }
