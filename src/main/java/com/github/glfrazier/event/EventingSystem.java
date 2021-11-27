@@ -12,7 +12,7 @@ import com.github.glfrazier.objectpool.ObjectPool;
 public class EventingSystem implements Runnable {
 
 	private TimeUnit finestTimeUnit = TimeUnit.MILLISECONDS;
-	private boolean realTime = true;
+	private final boolean realtime;
 	private Double realTimeMultiplier = null;
 	private PriorityQueue<QueuedEvent> queue;
 	private long currentTime;
@@ -48,12 +48,13 @@ public class EventingSystem implements Runnable {
 	 * 
 	 * @see #setFinestTimeUnit(TimeUnit)
 	 */
-	public EventingSystem() {
+	public EventingSystem(boolean realtime) {
+		this.realtime = realtime;
 		queue = new PriorityQueue<QueuedEvent>();
 	}
 
-	public EventingSystem(String name) {
-		this();
+	public EventingSystem(String name, boolean realtime) {
+		this(realtime);
 		this.name = name;
 	}
 
@@ -178,7 +179,7 @@ public class EventingSystem implements Runnable {
 	 * @see #getCurrentTime()
 	 */
 	public long getCurrentTime(TimeUnit timeUnit) {
-		if (realTime) {
+		if (realtime) {
 			return timeUnit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
 		}
 		return timeUnit.convert(currentTime, finestTimeUnit);
@@ -305,7 +306,7 @@ public class EventingSystem implements Runnable {
 					continue;
 				}
 
-				if (realTime && qe.deliveryTime != null) {
+				if (realtime && qe.deliveryTime != null) {
 					if (verbose) {
 						System.out.println(this + " has an event to be delivered at " + qe.deliveryTime);
 					}
@@ -567,11 +568,11 @@ public class EventingSystem implements Runnable {
 		// TODO Auto-generated method stub
 		return false;
 	}
-
-	public void setRealTime(boolean b) {
-		realTime = b;
+	
+	public boolean isRealtime() {
+		return realtime;
 	}
-
+	
 	public PubSubDepot getPubSubDepot() {
 		if (pubsubDepot == null) {
 			synchronized (this) {
