@@ -1,5 +1,16 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash 
 set -x -e
-mvn package -DskipTests
-mvn install:install-file -Dfile=target/EventFramework-0.0.1.jar -DgroupId=com.github.glfrazier -DartifactId=EventFramework -Dversion=0.0.1 -Dpackaging=jar -DlocalRepositoryPath=/home/pi/mvn-repo
+KERNEL=`uname -s`
+ID=EventFramework
+VER=0.0.1
+
+if [[  $KERNEL == "Linux" ]]; then
+  mvn package -DskipTests
+  REPO=/home/pi/mvn-repo
+else
+  mvn -f pom.cyg.xml package -DskipTests
+  REPO=../mvn-repo
+fi
+
+mvn install:install-file -Dfile=target/${ID}-${VER}.jar -DgroupId=com.github.glfrazier -DartifactId=${ID} -Dversion=${VER} -Dpackaging=jar -DlocalRepositoryPath=${REPO}
 
