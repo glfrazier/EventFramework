@@ -21,7 +21,7 @@
 		<repository>
 			<id>localrepo</id>
 			<name>Local Repo</name>
-			<url>file:///C:/cygwin64/home/glfra/mvn-repo</url>
+			<url>file:///home/pi/mvn-repo</url>
 			<layout>default</layout>
 		</repository>
 
