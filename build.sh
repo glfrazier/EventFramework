@@ -13,4 +13,4 @@ else
 fi
 
 mvn install:install-file -Dfile=target/${ID}-${VER}.jar -DgroupId=com.github.glfrazier -DartifactId=${ID} -Dversion=${VER} -Dpackaging=jar -DlocalRepositoryPath=${REPO}
-
+rm -rf ${M2}/repository/com/github/glfrazier/${ID}
