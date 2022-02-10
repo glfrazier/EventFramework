@@ -11,6 +11,9 @@ import com.github.glfrazier.objectpool.ObjectPool;
 
 public class EventingSystem implements Runnable {
 
+	public static final boolean REALTIME = true;
+	public static final boolean NOT_REALTIME = false;
+
 	private TimeUnit finestTimeUnit = TimeUnit.MILLISECONDS;
 	private final boolean realtime;
 	private Double realTimeMultiplier = null;
@@ -33,6 +36,8 @@ public class EventingSystem implements Runnable {
 	private String name;
 	private boolean terminated;
 
+	private boolean zeroRelativeEventsAllowed;
+	
 	/**
 	 * In support of a pub-sub model
 	 */
@@ -57,6 +62,16 @@ public class EventingSystem implements Runnable {
 		this(realtime);
 		this.name = name;
 	}
+	
+	public EventingSystem(String name, boolean realtime, boolean allowZeroRelativeEvents) {
+		this(realtime);
+		this.name = name;
+		this.zeroRelativeEventsAllowed = allowZeroRelativeEvents;
+	}
+	
+	public void allowZeroRelativeEvents() {
+		zeroRelativeEventsAllowed = true;
+	}
 
 	/**
 	 * Schedule an event to be delivered <code>timeRelative</code> time units in the
@@ -71,7 +86,14 @@ public class EventingSystem implements Runnable {
 	 * @see #getFinestTimeUnit()
 	 */
 	public void scheduleEventRelative(EventProcessor target, Event e, long timeRelative) {
-		scheduleEventRelative(target, e, timeRelative, finestTimeUnit);
+		if (timeRelative < 0) {
+			throw new IllegalArgumentException("Events must be scheduled for now or in the future (timeRelative >= 0)");
+		}
+		if (timeRelative == 0 && !zeroRelativeEventsAllowed) {
+			throw new IllegalArgumentException("Relative-scheduled events with timeRelative=0 are not allowed. See allowZeroRelativeEvents().");
+		}
+		long now = getCurrentTime();
+		scheduleEventAbsolute(target, e, now + timeRelative);
 	}
 
 	/**
@@ -87,7 +109,8 @@ public class EventingSystem implements Runnable {
 	 * @see #getFinestTimeUnit()
 	 */
 	public void scheduleEventAbsolute(EventProcessor target, Event e, long time) {
-		scheduleEventAbsolute(target, e, time, finestTimeUnit);
+		QueuedEvent qe = qePool.allocate(target, e, time);
+		appendQueuedEvent(qe);
 	}
 
 	/**
@@ -113,12 +136,12 @@ public class EventingSystem implements Runnable {
 	}
 
 	public void scheduleEventAbsolute(EventProcessor target, Event e, long time, TimeUnit timeUnit) {
-		if (finestTimeUnit.convert(time, timeUnit) < getCurrentTime()) {
+		long t = finestTimeUnit.convert(time, timeUnit);
+		if (t < getCurrentTime()) {
 			throw new IllegalArgumentException("Event scheduled for " + finestTimeUnit.convert(time, timeUnit)
 					+ ", current time = " + getCurrentTime());
 		}
-		QueuedEvent qe = qePool.allocate(target, e, finestTimeUnit.convert(time, timeUnit));
-		appendQueuedEvent(qe);
+		scheduleEventAbsolute(target, e, t);
 	}
 
 	/**
@@ -568,11 +591,11 @@ public class EventingSystem implements Runnable {
 		// TODO Auto-generated method stub
 		return false;
 	}
-	
+
 	public boolean isRealtime() {
 		return realtime;
 	}
-	
+
 	public PubSubDepot getPubSubDepot() {
 		if (pubsubDepot == null) {
 			synchronized (this) {
