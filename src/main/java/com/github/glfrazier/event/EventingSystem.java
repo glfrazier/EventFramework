@@ -16,7 +16,9 @@ public class EventingSystem implements Runnable {
 
 	private TimeUnit finestTimeUnit = TimeUnit.MILLISECONDS;
 	private final boolean realtime;
+	@SuppressWarnings("unused")
 	private Double realTimeMultiplier = null;
+	
 	private PriorityQueue<QueuedEvent> queue;
 	private long currentTime;
 	private long endTime;
@@ -24,6 +26,7 @@ public class EventingSystem implements Runnable {
 	private boolean verbose;
 	private boolean endWhenEmpty = false;
 
+	@SuppressWarnings("unused")
 	private int threadCount;
 
 	private long totalEventsDelivered = 0;
@@ -109,6 +112,12 @@ public class EventingSystem implements Runnable {
 	 * @see #getFinestTimeUnit()
 	 */
 	public void scheduleEventAbsolute(EventProcessor target, Event e, long time) {
+		if (target == null) {
+			throw new NullPointerException("target is null");
+		}
+		if (e == null) {
+			throw new NullPointerException("event is null");
+		}
 		QueuedEvent qe = qePool.allocate(target, e, time);
 		appendQueuedEvent(qe);
 	}
@@ -403,6 +412,7 @@ public class EventingSystem implements Runnable {
 	 * @author Greg Frazier
 	 *
 	 */
+	@SuppressWarnings("serial")
 	protected static class QueuedEvent extends AbstractPooledObject implements Comparable<QueuedEvent> {
 
 		private EventProcessor target;

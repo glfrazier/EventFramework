@@ -8,5 +8,8 @@ package com.github.glfrazier.event;
  * 
  */
 public interface Event {
+	
+	/** A generic event, for ease of use. */
+	public static final Event EVENT = new Event() {};
 
 }
