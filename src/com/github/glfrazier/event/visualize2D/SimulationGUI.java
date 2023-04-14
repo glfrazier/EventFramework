@@ -4,7 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
@@ -219,7 +218,7 @@ public class SimulationGUI extends JFrame implements EventProcessor {
 	}
 
 	@Override
-	public void process(Event e, EventingSystem eventingSystem) {
+	public void process(Event e, EventingSystem eventingSystem, long t) {
 		timeLabel.setText(String.format("%3.1f", eventingSystem.getElapsedTime() / 1000.0));
 		display.repaint();
 		eventingSystem.scheduleEventRelative(this, e, 100);

@@ -386,7 +386,7 @@ public class EventingSystem implements Runnable {
 						getCurrentTime() + ":\t" + this + " delivering <" + qe.getEvent() + "> to " + qe.getTarget());
 				System.err.flush();
 			}
-			qe.getTarget().process(qe.getEvent(), this);
+			qe.getTarget().process(qe.getEvent(), this, currentTime);
 		}
 		if (verbose) {
 			System.err.println(
@@ -524,9 +524,9 @@ public class EventingSystem implements Runnable {
 	@Override
 	public String toString() {
 		if (name != null) {
-			return name;
+			return name + "." + Thread.currentThread();
 		}
-		return super.toString();
+		return super.toString()+ "." + Thread.currentThread();
 	}
 
 	/**

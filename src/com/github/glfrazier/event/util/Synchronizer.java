@@ -32,50 +32,86 @@ import com.github.glfrazier.event.EventingSystem;
  */
 public class Synchronizer implements EventProcessor {
 
-	public static final Event SYNC_EVENT = new Event() {
-		public String toString() {
-			return "SYNC_EVENT for the Synchronizer";
-		}
-	};
-
 	private int numberOfEventingSystems;
 	private long interval;
 	private int threadCount;
+	private boolean verbose;
+	private Thread[] threads;
+	private boolean[] threadSeenAlive;
+
+	private boolean toggle;
 
 	public Synchronizer(int numberOfEventingSystems, long interval) {
+		this(numberOfEventingSystems, interval, false);
+	}
+
+	public Synchronizer(int numberOfEventingSystems, long interval, boolean verbose) {
 		this.numberOfEventingSystems = numberOfEventingSystems;
 		this.interval = interval;
+		this.verbose = verbose;
+	}
+
+	public Synchronizer(Thread[] threads, long interval, EventingSystem eventingSystem) {
+		this(threads, interval, eventingSystem, false);
+	}
+
+	public Synchronizer(Thread[] threads, long interval, EventingSystem eventingSystem, boolean verbose) {
+		this.numberOfEventingSystems = threads.length;
+		this.interval = interval;
+		this.verbose = verbose;
+		this.threads = threads;
+		this.threadSeenAlive = new boolean[threads.length];
+		for (int i = 0; i < threads.length; i++) {
+			threadSeenAlive[i] = false;
+			eventingSystem.scheduleEvent(this, Event.EVENT);
+		}
 	}
 
 	@Override
-	public void process(Event e, EventingSystem eventingSystem) {
-		process(e, eventingSystem, false);
-	}
-
-	public void process(Event e, EventingSystem eventingSystem, boolean verbose) {
+	public void process(Event e, EventingSystem eventingSystem, long deliveryTime) {
 		synchronized (this) {
 			if (verbose) {
 				System.out.println(this + ": receveived " + e + " from " + eventingSystem);
 			}
 			threadCount++;
+			boolean localToggle = toggle;
 			if (threadCount == numberOfEventingSystems) {
 				threadCount = 0;
+				toggle = !toggle;
 				if (verbose) {
 					System.out.println(this + ": =====================================");
 				}
 				notifyAll();
 			} else {
-				try {
-					wait();
-				} catch (InterruptedException e1) {
-					return;
+				while (localToggle == toggle) {
+					try {
+						if (threads != null) {
+							for (int i = 0; i < threads.length; i++) {
+								if (!threads[i].isAlive()) {
+									if (threadSeenAlive[i]) {
+										System.out.println("SYNC: " + Thread.currentThread()
+												+ " has detected that thread " + threads[i] + " is not alive.");
+										return;
+									}
+									// we have not yet seen this thread alive, so ignore the fact that it is dead.
+								} else {
+									threadSeenAlive[i] = true;
+								}
+							}
+						} else {
+							System.out.println("SYNC: " + Thread.currentThread() + ": there is no threads array.");
+						}
+						wait(500);
+					} catch (InterruptedException e1) {
+						return;
+					}
 				}
 			}
 			if (verbose) {
 				System.out.println(this + ": released " + eventingSystem);
 			}
 		}
-		eventingSystem.scheduleEventRelative(this, e, interval);
+		eventingSystem.scheduleEventAbsolute(this, e, deliveryTime + interval);
 	}
 
 	@Override

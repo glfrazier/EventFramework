@@ -48,7 +48,7 @@ public class PubSubDepot implements EventProcessor {
 	 * one must explicitly subscribe to the class of interest.
 	 */
 	@Override
-	public void process(Event e, EventingSystem eventingSystem) {
+	public void process(Event e, EventingSystem eventingSystem, long currentTime) {
 		Class<? extends Event> ec = e.getClass();
 		Set<EventProcessor> targets = new HashSet<>();
 		synchronized (this) {
@@ -59,7 +59,7 @@ public class PubSubDepot implements EventProcessor {
 			targets.addAll(set);
 		}
 		for (EventProcessor target : targets) {
-			target.process(e, eventingSystem);
+			target.process(e, eventingSystem, currentTime);
 		}
 	}
 

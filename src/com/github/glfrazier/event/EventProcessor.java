@@ -13,7 +13,8 @@ public interface EventProcessor {
 	 * 
 	 * @param e              the event to process
 	 * @param eventingSystem the eventing system that delivered the event
+	 * @param deliveryTime	the time according to the eventing system
 	 */
-	public void process(Event e, EventingSystem eventingSystem);
+	public void process(Event e, EventingSystem eventingSystem, long deliveryTime);
 
 }
