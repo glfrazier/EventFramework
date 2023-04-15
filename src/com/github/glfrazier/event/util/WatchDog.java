@@ -18,6 +18,7 @@ public class WatchDog extends Thread implements EventProcessor {
 	private boolean running = false;
 	private boolean toggle = false;
 	private Thread threadToMonitor;
+	private EventingSystem eventingSystem;
 
 	public WatchDog(long sleepInterval, long alertInterval) {
 		super("watchdog");
@@ -41,6 +42,7 @@ public class WatchDog extends Thread implements EventProcessor {
 		touched();
 		if (!running) {
 			threadToMonitor = Thread.currentThread();
+			this.eventingSystem = eventingSystem;
 			this.start();
 		}
 		eventingSystem.scheduleEventRelative(this, e, sleepInterval);
@@ -50,14 +52,16 @@ public class WatchDog extends Thread implements EventProcessor {
 		running = true;
 		while (true) {
 			try {
+				System.err.println(System.currentTimeMillis() + ": " + this + " going to sleep for " + alertInterval + " ms.");
 				Thread.sleep(alertInterval);
+				System.err.println(System.currentTimeMillis() + ": " + this + " woke up.");
 			} catch (InterruptedException e) {
 				running = false;
 				return;
 			}
 			if (!wasTouched()) {
 				StackTraceElement[] trace = threadToMonitor.getStackTrace();
-				System.err.println("Watchdog alerting on thread " + threadToMonitor + ":");
+				System.err.println("Watchdog alerting on thread " + threadToMonitor + " at simtime " + eventingSystem.getCurrentTime() + ":");
 				if (trace.length == 0) {
 					System.err.println(">> The thread appears to have terminated; there is no stack trace.");
 					return;
