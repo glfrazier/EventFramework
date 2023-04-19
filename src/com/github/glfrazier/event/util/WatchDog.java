@@ -52,22 +52,20 @@ public class WatchDog extends Thread implements EventProcessor {
 		running = true;
 		while (true) {
 			try {
-				System.err.println(System.currentTimeMillis() + ": " + this + " going to sleep for " + alertInterval + " ms.");
 				Thread.sleep(alertInterval);
-				System.err.println(System.currentTimeMillis() + ": " + this + " woke up.");
 			} catch (InterruptedException e) {
 				running = false;
 				return;
 			}
 			if (!wasTouched()) {
 				StackTraceElement[] trace = threadToMonitor.getStackTrace();
-				System.err.println("Watchdog alerting on thread " + threadToMonitor + " at simtime " + eventingSystem.getCurrentTime() + ":");
+				System.err.println("Watchdog alerting on thread " + threadToMonitor + " at time " + eventingSystem.getCurrentTime() + ":");
 				if (trace.length == 0) {
 					System.err.println(">> The thread appears to have terminated; there is no stack trace.");
 					return;
 				} else {
 					for (StackTraceElement t : trace) {
-						System.err.println(">>\t" + t);
+						System.err.println("  >>  " + t);
 					}
 				}
 			}
